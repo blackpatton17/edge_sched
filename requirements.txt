@@ -4,3 +4,6 @@ pysmt>=0.9.1
 z3-solver>=4.8.12.0
 PyYAML>=6.0
 matplotlib>=3.5
+
+# Optional for testing
+pytest>=7.0
