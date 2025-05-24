@@ -25,10 +25,10 @@ pip install -e .
 ## Usage
 Solve a generated instance using Z3 SMT solver:
 ```bash
-edge-sched generate --tasks 10 --devices 3 --output input.json --layered
+python -m edge_sched.cli generate --tasks 8 --devices 3 -o input.json --layered --layers 2
 ```
 ```bash
-edge-sched solve input.json --alpha 1 --beta 1 --gamma 1
+python -m edge_sched.cli solve input.json --alpha 1 --beta 1 --gamma 1
 ```
 Where:
 - alpha: Weight on total energy
@@ -39,3 +39,8 @@ The output `output.json` will include:
 - Task → device assignment
 - Task start times
 - Total cost minimized
+
+Generate diagram of the generate task DAG
+```bash
+python -m edge_sched.cli vis results/input_n5_m3_a1b1g1.json
+```
