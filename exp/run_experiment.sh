@@ -21,7 +21,7 @@ for n in "${TASK_COUNTS[@]}"; do
       echo "generate experiment: $id"
 
       # Step 1: Generate input
-      edge-sched generate --tasks $n --devices $m --output ./results/input_${id}.json --layered 
+      python -m edge_sched.cli generate --tasks $n --devices $m --output ./results/input_${id}.json --layered 
 
       # Step 2: Solve
     #   edge-sched solve input_${id}.json --alpha $alpha --beta $beta --gamma $gamma --output input_${id}_solution.json
@@ -55,7 +55,7 @@ for n in "${TASK_COUNTS[@]}"; do
     #   edge-sched generate --tasks $n --devices $m --output input_${id}.json --layered 
 
       # Step 2: Solve
-      edge-sched solve input_${id}.json --alpha $alpha --beta $beta --gamma $gamma --output input_${id}_solution.json
+      python -m edge_sched.cli solve input_${id}.json --alpha $alpha --beta $beta --gamma $gamma --output input_${id}_solution.json
 
     #   # Step 3: Extract result
     #   if [[ -f input_${id}_solution.json ]]; then
