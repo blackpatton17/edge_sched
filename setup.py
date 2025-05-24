@@ -14,7 +14,7 @@ setup(
     ],
     entry_points={
         "console_scripts": [
-            "edge-sched=edge_sched.cli:cli"
+            "edge-sched=edge_sched.cli:main"
         ]
-    },
+    }
 )

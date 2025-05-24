@@ -89,27 +89,40 @@ def solve_instance(input_file, alpha=1.0, beta=1.0, gamma=1.0, timeout=60):
     # total_compute = Sum([If(a[i, j], 1.0, 0.0) for i in tasks for j in range(m)])
 
     obj = alpha * total_energy + beta * total_latency + gamma * total_compute
+    for i in tasks:
+        opt.add(s[i] >= 0)
     opt.minimize(obj)
 
-    if opt.check() == z3.sat:
-        model = opt.model()
-        assignments = {}
-        start_times = {}
+    with open("output.json", 'w') as f:
+        if opt.check() == z3.sat:
+            model = opt.model()
+            assignments = {}
+            start_times = {}
 
-        for i in tasks:
-            for j in range(m):
-                var = a[i, j]
-                val = model.evaluate(var, model_completion=True)
-                if z3.is_true(val):
-                    assignments[str(i)] = j
+            for i in tasks:
+                for j in range(m):
+                    val = model.evaluate(a[i, j], model_completion=True)
+                    if z3.is_true(val):
+                        assignments[str(i)] = j
 
-            s_val = model.evaluate(s[i], model_completion=True)
-            start_times[str(i)] = float(s_val.as_decimal(5).replace("?", ""))  # Convert to float
+                s_val = model.evaluate(s[i], model_completion=True)
+                start_times[str(i)] = float(s_val.as_decimal(5).replace("?", ""))
 
-        return {
-            "status": "SAT",
-            "assignments": assignments,
-            "start_times": start_times
-        }
-    else:
-        return {"status": "UNSAT"}
+            # Evaluate total cost from objective expression
+            total_cost_val = model.evaluate(obj, model_completion=True)
+            total_cost = float(total_cost_val.as_decimal(5).replace("?", ""))
+
+            json.dump({
+                "status": "SAT",
+                "assignments": assignments,
+                "start_times": start_times,
+                "total_cost": total_cost
+            }, f, indent=2)
+            return
+
+        else:
+            json.dump({
+                "status": "UNSAT"
+            }, f, indent=2)
+            return
+
