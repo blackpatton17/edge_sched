@@ -1,55 +1,115 @@
-"""
-solver_interface.py
-High‑level wrapper: read YAML → build model → branch‑and‑bound
-to minimise the objective using a plain SMT solver.
-"""
-import yaml, json
-from pysmt.shortcuts import Solver, Real, LE
-from edge_sched.encoder import build_model
+import z3
+from z3 import Real, Bool, And, Or, If, Sum, Optimize
+import json
 
-def solve_instance(path, alpha=1, beta=1, gamma=1, timeout=60):
-    data = yaml.safe_load(open(path))
+def solve_instance(input_file, alpha=1.0, beta=1.0, gamma=1.0, timeout=60):
+    z3.set_param('verbose', 1)
+    with open(input_file, 'r') as f:
+        data = json.load(f)
 
-    # Build constraints & objective
-    constraints, obj, a_vars, _ = build_model(data, alpha, beta, gamma)
+    tasks = data["tasks"]
+    edges = data["edges"]
+    devices = data["devices"]
+    payloads = {int(k): float(v) for k, v in data["payloads"].items()}
+    n, m = len(tasks), len(devices)
 
-    solver = Solver(name="z3")
+    a = {}
+    s = {}
+    for i in tasks:
+        s[i] = Real(f"s_{i}")
+        for j in range(m):
+            a[i, j] = Bool(f"a_{i}_{j}")
 
-    for c in constraints:
-        solver.add_assertion(c)
+    # Total payload assigned to each device (utilization)
+    u = {}
+    for j in range(m):
+        u[j] = Sum([If(a[i, j], payloads[i], 0.0) for i in tasks])
 
-    best_cost   = None
-    best_assign = None
+    opt = Optimize()
 
-    # --- simple integer branch‑and‑bound loop ---
-    while True:
-        if not solver.solve():
-            break   # UNSAT with current bound → last model was optimal
+    # Assignment constraints
+    for i in tasks:
+        opt.add(Sum([If(a[i, j], 1, 0) for j in range(m)]) == 1)
 
-        model     = solver.get_model()
-        cost_val = model.get_value(obj).constant_value()
+    # Precedence constraints
+    for i, k in edges:
+        for j in range(m):
+            latency = devices[j]["zeta"] + devices[j]["eta"] * payloads[i]
+            opt.add(If(a[i, j], s[k] >= s[i] + latency, True))
 
-        # record best
-        best_cost   = cost_val
-        best_assign = {
-            (i, j): model.get_value(var).is_true()
-            for (i, j), var in a_vars.items()
+
+    # Capacity constraint based on total payload per device
+    for j in range(m):
+        total_payload = Sum([
+            If(a[i, j], payloads[i], 0.0) for i in tasks
+        ])
+        opt.add(total_payload <= devices[j]["capacity"])
+
+    
+    energy_terms = []
+    for i in tasks:
+        for j in range(m):
+            epsilon = devices[j]["epsilon"]
+            delta = devices[j]["delta"]
+            mu = devices[j]["mu"]
+            nu = devices[j]["nu"]
+            U1 = devices[j]["U1"]
+            U2 = devices[j]["U2"]
+
+            payload = payloads[i]
+            base = epsilon * payload + delta
+            mid = base + mu * (u[j] - U1)
+            high = base + mu * (U2 - U1) + nu * (u[j] - U2)
+
+            # Piecewise function for energy cost
+            piecewise_energy = If(u[j] < U1, base,
+                                  If(u[j] < U2, mid, high))
+
+            energy_terms.append(If(a[i, j], piecewise_energy, 0.0))
+            # energy = epsilon * payloads[i] + delta
+            # energy_terms.append(If(a[i, j], energy, 0.0))
+
+    total_energy = Sum(energy_terms)
+
+    latency_terms = [
+        If(a[i, j], devices[j]["zeta"] + devices[j]["eta"] * payloads[i], 0.0)
+        for i in tasks for j in range(m)
+    ]
+
+    total_latency = Sum(latency_terms)
+
+    total_compute = Sum([
+        If(a[i, j], payloads[i] / devices[j]["processing_rate"], 0.0)
+        for i in tasks for j in range(m)
+    ])
+
+    # Objective: placeholder costs
+    # total_energy = Sum([If(a[i, j], 1.0, 0.0) for i in tasks for j in range(m)])
+    # total_latency = Sum([If(a[i, j], 1.0, 0.0) for i in tasks for j in range(m)])
+    # total_compute = Sum([If(a[i, j], 1.0, 0.0) for i in tasks for j in range(m)])
+
+    obj = alpha * total_energy + beta * total_latency + gamma * total_compute
+    opt.minimize(obj)
+
+    if opt.check() == z3.sat:
+        model = opt.model()
+        assignments = {}
+        start_times = {}
+
+        for i in tasks:
+            for j in range(m):
+                var = a[i, j]
+                val = model.evaluate(var, model_completion=True)
+                if z3.is_true(val):
+                    assignments[str(i)] = j
+
+            s_val = model.evaluate(s[i], model_completion=True)
+            start_times[str(i)] = float(s_val.as_decimal(5).replace("?", ""))  # Convert to float
+
+        return {
+            "status": "SAT",
+            "assignments": assignments,
+            "start_times": start_times
         }
-
-        # tighten bound: obj ≤ best‑1   (cost is integer here)
-        solver.add_assertion(LE(obj, Real(cost_val - 1)))
-
-    if best_assign is None:
-        return {"status": "unsat"}
-
-    # extract task→device mapping
-    assignment = {}
-    for (i, j), truth in best_assign.items():
-        if truth:
-            assignment[i] = data["devices"][j]["id"]
-
-    return {
-        "status":     "opt",
-        "best_cost":  float(best_cost),
-        "assignment": assignment,
-    }
+    else:
+        return {"status": "UNSAT"}
