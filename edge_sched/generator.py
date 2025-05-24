@@ -1,11 +1,10 @@
 import random
 import networkx as nx
 import json
+import statistics
 
 def layered_dag(num_tasks, num_layers=3, max_edges_per_node=2):
-    """Generate a layered DAG with edges only flowing forward between layers."""
     import math
-
     dag = nx.DiGraph()
     dag.add_nodes_from(range(num_tasks))
 
@@ -15,10 +14,10 @@ def layered_dag(num_tasks, num_layers=3, max_edges_per_node=2):
         layer_index = min(i * num_layers // num_tasks, num_layers - 1)
         layers[layer_index].append(node)
 
-    # Connect each node to random nodes in the next layer
     for i in range(num_layers - 1):
         for u in layers[i]:
-            targets = random.sample(layers[i + 1], min(max_edges_per_node, len(layers[i + 1])))
+            fanout = random.randint(1, max_edges_per_node)
+            targets = random.sample(layers[i + 1], min(fanout, len(layers[i + 1])))
             for v in targets:
                 dag.add_edge(u, v)
 
@@ -27,7 +26,6 @@ def layered_dag(num_tasks, num_layers=3, max_edges_per_node=2):
 
 
 def random_dag(num_tasks, max_fanout=3):
-    """Generate a random DAG with a given number of tasks."""
     dag = nx.DiGraph()
     dag.add_nodes_from(range(num_tasks))
 
@@ -43,16 +41,16 @@ def random_dag(num_tasks, max_fanout=3):
     assert nx.is_directed_acyclic_graph(dag)
     return dag
 
+
 def gen_devices(num_devices):
-    """Generate a list of devices with random parameters."""
     devices = []
     for i in range(num_devices):
         devices.append({
             "id": i,
-            "capacity": random.randint(50, 100),
-            "energy_budget": random.uniform(200.0, 500.0),
-            "zeta": round(random.uniform(0.1, 2.0), 2),   # startup latency
-            "eta": round(random.uniform(0.01, 0.1), 3),   # bandwidth delay factor
+            "capacity": random.uniform(10248, 20480),  # CPU tokens
+            "energy_budget": random.uniform(1000.0, 2000.0),
+            "zeta": round(random.uniform(0.1, 0.5), 2),
+            "eta": round(random.uniform(0.01, 0.1), 3),
             "U1": 0.3,
             "U2": 0.7,
             "epsilon": 1.0,
@@ -63,19 +61,49 @@ def gen_devices(num_devices):
         })
     return devices
 
-def save_json(dag, devices, filename):
-    """Save DAG and device info into a JSON file."""
 
-    # Assign random payloads to tasks (e.g., 1.0 to 10.0 MB)
+def gen_deadlines(tasks, devices, payloads, edges, slack=5.0):
+    dag = nx.DiGraph()
+    dag.add_nodes_from(tasks)
+    dag.add_edges_from(edges)
+
+    # Estimate base latency per device per task
+    base_latency = {
+        task: statistics.median([
+            dev["zeta"] + dev["eta"] * payloads[str(task)] for dev in devices
+        ])
+        for task in tasks
+    }
+
+    deadlines = {}
+
+    # Walk the DAG in topological order
+    for task in nx.topological_sort(dag):
+        preds = list(dag.predecessors(task))
+        if not preds:
+            earliest_start = 0
+        else:
+            earliest_start = max(deadlines[str(p)] for p in preds)
+
+        # Deadline = earliest this task could start + its own runtime + slack
+        deadlines[str(task)] = round(earliest_start + base_latency[task] + slack, 2)
+
+    return deadlines
+
+
+def save_json(dag, devices, filename):
     tasks = list(dag.nodes)
     edges = list(dag.edges)
     payloads = {str(task): round(random.uniform(1.0, 30.0), 2) for task in tasks}
+    deadlines = gen_deadlines(tasks, devices, payloads, edges)
 
     data = {
         "tasks": tasks,
         "edges": edges,
         "devices": devices,
         "payloads": payloads,
+        "deadlines": deadlines
     }
+
     with open(filename, 'w') as f:
         json.dump(data, f, indent=2)

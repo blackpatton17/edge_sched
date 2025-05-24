@@ -4,3 +4,7 @@
 /*.egg-info/*
 /exp/results/*.json
 /exp/results/*.csv
+edge_sched/__pycache__/cli.cpython-310.pyc
+edge_sched/__pycache__/generator.cpython-310.pyc
+edge_sched/__pycache__/solver_interface.cpython-310.pyc
+edge_sched/__pycache__/vis_dag.cpython-310.pyc

@@ -4,6 +4,7 @@ Command line interface.
 import argparse, json, yaml, sys
 from edge_sched.generator import layered_dag, random_dag, gen_devices, save_json
 from edge_sched.solver_interface import solve_instance
+from edge_sched.vis_dag import load_instance, plot_dag
 
 def main():
     ap=argparse.ArgumentParser(prog='edge-sched')
@@ -24,6 +25,10 @@ def main():
     s.add_argument('--timeout',type=int,default=60)
     s.add_argument('-o','--output',default='output.json')
 
+    v = sub.add_parser('vis')
+    v.add_argument('file', help='Input instance JSON file')
+    v.add_argument('-o', '--output', help='Output image path (e.g. dag.png)', default=None)
+
     args=ap.parse_args()
     if args.cmd=='generate':
         if args.layered:
@@ -36,6 +41,10 @@ def main():
     elif args.cmd=='solve':
         res=solve_instance(args.file,args.alpha,args.beta,args.gamma,args.timeout, args.output)
         print(json.dumps(res,indent=2))
+    elif args.cmd == 'vis':
+        data = load_instance(args.file)
+        output_path = args.output or args.file.replace('.json', '_dag.png')
+        plot_dag(data["tasks"], data["edges"], output_path)
     else:
         ap.print_help()
 
