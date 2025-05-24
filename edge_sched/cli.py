@@ -22,6 +22,7 @@ def main():
     s.add_argument('--beta',type=float,default=1)
     s.add_argument('--gamma',type=float,default=1)
     s.add_argument('--timeout',type=int,default=60)
+    s.add_argument('-o','--output',default='output.json')
 
     args=ap.parse_args()
     if args.cmd=='generate':
@@ -33,7 +34,7 @@ def main():
         save_json(dag, devs, args.output)
         print('Generated', args.output)
     elif args.cmd=='solve':
-        res=solve_instance(args.file,args.alpha,args.beta,args.gamma,args.timeout)
+        res=solve_instance(args.file,args.alpha,args.beta,args.gamma,args.timeout, args.output)
         print(json.dumps(res,indent=2))
     else:
         ap.print_help()

@@ -2,8 +2,8 @@ import z3
 from z3 import Real, Bool, And, Or, If, Sum, Optimize
 import json
 
-def solve_instance(input_file, alpha=1.0, beta=1.0, gamma=1.0, timeout=60):
-    z3.set_param('verbose', 1)
+def solve_instance(input_file, alpha=1.0, beta=1.0, gamma=1.0, timeout=60, filename='output.json'):
+    z3.set_param('verbose', 10)
     with open(input_file, 'r') as f:
         data = json.load(f)
 
@@ -12,6 +12,9 @@ def solve_instance(input_file, alpha=1.0, beta=1.0, gamma=1.0, timeout=60):
     devices = data["devices"]
     payloads = {int(k): float(v) for k, v in data["payloads"].items()}
     n, m = len(tasks), len(devices)
+
+    if sum(payloads.values()) > sum(dev["capacity"] for dev in devices):
+        return {"status": "UNSAT", "reason": "overload"}
 
     a = {}
     s = {}
@@ -93,7 +96,7 @@ def solve_instance(input_file, alpha=1.0, beta=1.0, gamma=1.0, timeout=60):
         opt.add(s[i] >= 0)
     opt.minimize(obj)
 
-    with open("output.json", 'w') as f:
+    with open(filename, 'w') as f:
         if opt.check() == z3.sat:
             model = opt.model()
             assignments = {}
