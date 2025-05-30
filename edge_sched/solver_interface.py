@@ -3,7 +3,7 @@ from z3 import Real, Bool, And, Or, If, Sum, Optimize
 import json
 
 
-def solve_instance(input_file, alpha=1.0, beta=1.0, gamma=1.0, timeout=60, filename='output.json'):
+def solve_instance(input_file, alpha=1.0, beta=1.0, gamma=1.0, timeout=360, filename='output.json'):
     z3.set_param('verbose', 10)
     z3.set_param("parallel.enable", True)
     with open(input_file, 'r') as f:
@@ -33,7 +33,7 @@ def solve_instance(input_file, alpha=1.0, beta=1.0, gamma=1.0, timeout=60, filen
         u[j] = Sum([If(a[i, j], payloads[i], 0.0) for i in tasks])
 
     opt = Optimize()
-    # opt.set("timeout", timeout * 1000)  # Set timeout in ms
+    opt.set("timeout", timeout * 1000)  # Set timeout in ms
 
     top_k = 5
     for i in tasks:
